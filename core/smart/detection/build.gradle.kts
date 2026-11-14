@@ -19,6 +19,22 @@
 
 import com.buzbuz.gradle.convention.extensions.fDroid
 
+// CI prepares these pinned Khronos dependencies before invoking Gradle.
+// Builds without them keep the original CPU-only OpenCV configuration.
+val openClHeadersDir = rootProject.file("opencl-headers")
+val openClLoaderArchive = rootProject.file("icd-loader/build/libOpenCL.a")
+val openClAccelerationEnabled =
+    openClHeadersDir.resolve("CL/cl.h").isFile && openClLoaderArchive.isFile
+val openClCmakeArguments = if (openClAccelerationEnabled) {
+    listOf(
+        "-DWITH_OPENCL=ON",
+        "-DOPENCL_INCLUDE_DIR=${openClHeadersDir.absolutePath}",
+        "-DOPENCL_LIBRARY=${openClLoaderArchive.absolutePath}",
+    )
+} else {
+    listOf("-DWITH_OPENCL=OFF")
+}
+
 plugins {
     alias(libs.plugins.buzbuz.androidLibrary)
     alias(libs.plugins.buzbuz.androidLocalTest)
@@ -73,7 +89,6 @@ android {
                         "-DBUILD_ITT=OFF",
                         "-DCV_DISABLE_OPTIMIZATION=ON",
                         "-DWITH_CUDA=OFF",
-                        "-DWITH_OPENCL=OFF",
                         "-DWITH_OPENCLAMDFFT=OFF",
                         "-DWITH_OPENCLAMDBLAS=OFF",
                         "-DWITH_VA_INTEL=OFF",
@@ -121,7 +136,7 @@ android {
                         "-DNCNN_BF16=OFF",
                         "-DNCNN_FP16=OFF",
                         "-DNCNN_INT8=OFF",
-                    )
+                    ) + openClCmakeArguments
                 )
             }
         }

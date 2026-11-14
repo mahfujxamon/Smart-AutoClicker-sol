@@ -1,0 +1,155 @@
+name: Build OpenCL accelerated APK
+
+on:
+  push:
+    branches:
+      - codex/opencl-image-detection-gpu
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_NDK_VERSION: 28.2.13676358
+  OPENCL_HEADERS_TAG: v2026.05.29
+  OPENCL_LOADER_TAG: v2026.05.29
+
+jobs:
+  build-opencl-apk:
+    name: Build arm64 OpenCL APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Smart AutoClicker
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-37" \
+            "ndk;${ANDROID_NDK_VERSION}"
+          test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/source.properties"
+          cat "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/source.properties"
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build git python3
+
+      - name: Clone pinned Khronos OpenCL headers
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch "${OPENCL_HEADERS_TAG}" \
+            https://github.com/KhronosGroup/OpenCL-Headers.git opencl-headers
+          test -f opencl-headers/CL/cl.h
+          git -C opencl-headers rev-parse HEAD
+
+      - name: Clone pinned Khronos OpenCL ICD loader
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch "${OPENCL_LOADER_TAG}" \
+            https://github.com/KhronosGroup/OpenCL-ICD-Loader.git icd-loader
+          test -f icd-loader/CMakeLists.txt
+          git -C icd-loader rev-parse HEAD
+
+      - name: Patch Khronos loader for Android direct providers
+        run: |
+          set -euxo pipefail
+          chmod +x scripts/patch-khronos-loader-android-direct.py
+          python3 scripts/patch-khronos-loader-android-direct.py \
+            icd-loader/loader/icd.c \
+            icd-loader/loader/icd_dispatch_generated.c \
+            icd-loader/loader/icd_dispatch.c
+          grep -n "smartautoclicker_direct_provider_active" icd-loader/loader/icd.c
+          grep -n "SMART_AUTOCLICKER_DIRECT_LOADER_ENTRYPOINTS" icd-loader/loader/icd_dispatch.c
+          test "$(
+            grep -c "SmartAutoClicker Android direct-provider dispatch" \
+              icd-loader/loader/icd_dispatch_generated.c
+          )" -ge 100
+
+      - name: Build static Android OpenCL loader
+        shell: bash
+        run: |
+          set -euxo pipefail
+          NDK_HOME="${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}"
+          cmake \
+            -S icd-loader \
+            -B icd-loader/build \
+            -DCMAKE_TOOLCHAIN_FILE="${NDK_HOME}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=OFF \
+            -DOPENCL_ICD_LOADER_PIC=ON \
+            -DOPENCL_ICD_LOADER_HEADERS_DIR="${GITHUB_WORKSPACE}/opencl-headers" \
+            -DENABLE_OPENCL_LAYERS=OFF
+          cmake --build icd-loader/build --config Release --target OpenCL -j"$(nproc)"
+          test -s icd-loader/build/libOpenCL.a
+          file icd-loader/build/libOpenCL.a
+          ar t icd-loader/build/libOpenCL.a | head -80
+
+      - name: Verify Android OpenCL loader static link
+        run: |
+          set -euxo pipefail
+          NDK_HOME="${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}"
+          CLANG="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          cat > /tmp/opencl_smoke.c <<'EOF'
+          #include <CL/cl.h>
+          int main(void) {
+              cl_uint count = 0;
+              return clGetPlatformIDs(0, 0, &count) == CL_SUCCESS ? 0 : 1;
+          }
+          EOF
+          "${CLANG}" -I"${GITHUB_WORKSPACE}/opencl-headers" \
+            /tmp/opencl_smoke.c icd-loader/build/libOpenCL.a -ldl -o /tmp/opencl_smoke
+          file /tmp/opencl_smoke
+          readelf -lW /tmp/opencl_smoke | awk '$1=="LOAD" {print}'
+
+      - name: Build Smart AutoClicker with OpenCL image matching
+        env:
+          JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
+        run: |
+          set -euxo pipefail
+          ./gradlew --no-daemon --stacktrace \
+            -PabiFilters=arm64-v8a \
+            assembleFDroidDebug
+
+      - name: Run local unit tests
+        env:
+          JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"
+        run: ./gradlew --no-daemon testFDroidDebugUnitTest
+
+      - name: Verify generated APKs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find smartautoclicker/build/outputs/apk/fDroid/debug -maxdepth 1 -type f -name '*.apk' -print
+          test -n "$(find smartautoclicker/build/outputs/apk/fDroid/debug -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          for apk in smartautoclicker/build/outputs/apk/fDroid/debug/*.apk; do
+            test -s "$apk"
+            sha256sum "$apk"
+          done
+
+      - name: Upload OpenCL debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smart-AutoClicker-OpenCL-arm64-debug
+          path: smartautoclicker/build/outputs/apk/fDroid/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

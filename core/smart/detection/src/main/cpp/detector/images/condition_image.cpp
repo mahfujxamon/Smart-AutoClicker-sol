@@ -35,5 +35,6 @@ void ConditionImage::processNewData(std::unique_ptr<cv::Mat> newData, int target
     }
 
     grayValid = false;
+    grayUMatValid = false;
     hsvValid = false;
 }

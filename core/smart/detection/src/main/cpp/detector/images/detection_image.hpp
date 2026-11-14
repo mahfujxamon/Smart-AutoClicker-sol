@@ -18,7 +18,7 @@
 #ifndef KLICK_R_DETECTION_IMAGE_HPP
 #define KLICK_R_DETECTION_IMAGE_HPP
 
-#include <opencv2/core/types.hpp>
+#include <opencv2/core.hpp>
 
 namespace smartautoclicker {
 
@@ -28,6 +28,8 @@ namespace smartautoclicker {
         cv::Mat colorMat;
         mutable cv::Mat grayMat;
         mutable bool grayValid = false;
+        mutable cv::UMat grayUMat;
+        mutable bool grayUMatValid = false;
         mutable cv::Mat hsvMat;
         mutable bool hsvValid = false;
 
@@ -36,6 +38,7 @@ namespace smartautoclicker {
 
         [[nodiscard]] const cv::Mat& getColorMat() const;
         [[nodiscard]] const cv::Mat& getGrayMat() const;
+        [[nodiscard]] const cv::UMat& getGrayUMat() const;
         [[nodiscard]] const cv::Mat& getHsvMat() const;
         [[nodiscard]] cv::Scalar getHsvMean() const;
         [[nodiscard]] cv::Rect getRoi() const;

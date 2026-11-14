@@ -25,6 +25,7 @@
 #include <map>
 
 #include "jni/jni.hpp"
+#include "opencl/android_opencl_provider.hpp"
 #include "detector/detector.hpp"
 
 using namespace smartautoclicker;
@@ -35,6 +36,9 @@ extern "C" {
             JNIEnv *env,
             jobject self
     ) {
+        // Select a device-supplied provider before OpenCV initializes OpenCL
+        // for the first image-detection request. Discovery itself is symbol-only.
+        configureAndroidOpenCLProvider();
         return reinterpret_cast<jlong>(new Detector());
     }
 

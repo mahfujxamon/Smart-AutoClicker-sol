@@ -64,38 +64,43 @@ void TemplateMatcher::matchTemplate(
         int threshold
 ) {
 
-    // Crop the gray screen image to get only the detection area
-    cv::Mat screenCroppedGrayMat = screenImage.cropGray(detectionArea);
-    if (screenCroppedGrayMat.empty()) {
-        LOGE("TemplateMatcher", "screenCroppedGrayMat is empty after cropping.");
+    // Keep the screen crop, condition template and correlation output in
+    // UMat objects. OpenCV selects its OpenCL matchTemplate implementation
+    // when the library was built with WITH_OPENCL and the device is available.
+    cv::UMat screenCroppedGray = screenImage.cropGrayUMat(detectionArea);
+    if (screenCroppedGray.empty()) {
+        LOGE("TemplateMatcher", "screenCroppedGray is empty after cropping.");
         return;
     }
 
-    // Initialize result mat
-    cv::Mat newResultsMat = cv::Mat(
-            std::max(screenCroppedGrayMat.rows - condition.getGrayMat().rows + 1, 0),
-            std::max(screenCroppedGrayMat.cols - condition.getGrayMat().cols + 1, 0),
-            CV_32F);
+    const cv::UMat& conditionGray = condition.getGrayUMat();
+    if (conditionGray.empty()) {
+        LOGE("TemplateMatcher", "conditionGray is empty.");
+        return;
+    }
+
+    cv::UMat newResultsUMat;
 
     try {
-        // Run OpenCv template matching
         cv::matchTemplate(
-                screenCroppedGrayMat,
-                condition.getGrayMat(),
-                newResultsMat,
+                screenCroppedGray,
+                conditionGray,
+                newResultsUMat,
                 cv::TM_CCOEFF_NORMED);
     } catch (const cv::Exception& e) {
         LOGE("TemplateMatcher", "OpenCV Exception caught: %s", e.what());
         throw;
     } catch (const std::exception& e) {
         LOGE("TemplateMatcher", "Standard Exception caught: %s", e.what());
-        throw; // Rethrow
+        throw;
     } catch (...) {
         LOGE("TemplateMatcher", "Unknown exception caught!");
         throw std::runtime_error("Unknown exception in TemplateMatcher");
-    } // Rethrow the Exceptions to be caught by the JNI wrapper
+    }
 
-    // Parse result Mat to check for matching
+    // Keep the existing result validation/suppression logic. Mapping the
+    // correlation result back to Mat is only needed for CPU-side result parsing.
+    cv::Mat newResultsMat = newResultsUMat.getMat(cv::ACCESS_READ);
     parseMatchingResult(screenImage, condition, detectionArea, threshold, newResultsMat);
 }
 

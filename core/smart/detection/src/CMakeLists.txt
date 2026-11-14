@@ -35,6 +35,8 @@ add_library( # Sets the name of the library.
 
         # Provides a relative path to your source file(s).
         main/cpp/smartautoclicker.cpp
+        main/cpp/opencl/android_opencl_provider.cpp
+        main/cpp/opencl/android_opencl_provider.hpp
         main/cpp/detector/detection_result.hpp
         main/cpp/detector/detector.cpp
         main/cpp/detector/detector.hpp
@@ -93,6 +95,10 @@ find_library( # Sets the name of the path variable.
         # you want CMake to locate.
         android )
 
+find_library(
+        dl-lib
+        dl )
+
 # Third-party libraries are always optimized, even in debug, to keep detection performances usable while debugging.
 # Targets created before this call (smartautoclicker) are not affected.
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
@@ -127,7 +133,7 @@ IF(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/release/ncnn")
             ${CMAKE_CURRENT_BINARY_DIR}/release/ncnn/src )
 ENDIF()
 
-target_link_libraries(smartautoclicker opencv_core opencv_imgproc ncnn -ljnigraphics ${android-lib} ${log-lib} )
+target_link_libraries(smartautoclicker opencv_core opencv_imgproc ncnn -ljnigraphics ${android-lib} ${log-lib} ${dl-lib} )
 
 # Only built when imgcodecs is added to OpenCV BUILD_LIST, required by VISUAL_DEBUG in text_matcher_debugger.hpp
 IF(TARGET opencv_imgcodecs)

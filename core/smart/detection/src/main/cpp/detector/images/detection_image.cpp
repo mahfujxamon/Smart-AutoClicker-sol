@@ -33,6 +33,16 @@ const cv::Mat& DetectionImage::getGrayMat() const {
     return grayMat;
 }
 
+const cv::UMat& DetectionImage::getGrayUMat() const {
+    if (!grayUMatValid && !colorMat.empty()) {
+        // UMat output enables OpenCV's OpenCL color-conversion path when
+        // available; OpenCV retains its CPU fallback when it is not.
+        cv::cvtColor(colorMat, grayUMat, cv::COLOR_RGBA2GRAY);
+        grayUMatValid = true;
+    }
+    return grayUMat;
+}
+
 const cv::Mat& DetectionImage::getHsvMat() const {
     if (!hsvValid && !colorMat.empty()) {
         cv::Mat rgbMat;

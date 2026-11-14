@@ -96,3 +96,7 @@ scripts/**/*.pyc
 /*.zip
 /*.bat
 /*.ps1
+
+# Temporary Khronos OpenCL sources and Android loader built by CI
+/opencl-headers/
+/icd-loader/
