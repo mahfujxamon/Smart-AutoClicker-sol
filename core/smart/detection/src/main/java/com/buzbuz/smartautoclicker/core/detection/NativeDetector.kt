@@ -19,6 +19,7 @@ package com.buzbuz.smartautoclicker.core.detection
 import android.graphics.Bitmap
 import android.graphics.Point
 import android.graphics.Rect
+import android.util.Log
 import androidx.annotation.Keep
 import com.buzbuz.smartautoclicker.core.base.extensions.throwWithKeys
 
@@ -47,8 +48,14 @@ class NativeDetector private constructor() : ImageDetector {
     private var isClosed: Boolean = false
     private var screenDimensions: Point = Point(0, 0)
 
+    /** Runtime OpenCL capability report; this does not claim every operation runs on the GPU. */
+    @Volatile var accelerationStatus: String = "Checking OpenCL…"
+        private set
+
     override fun init() {
         nativePtr = newDetector()
+        accelerationStatus = getOpenCLStatusNative()
+        Log.i(OPENCL_TAG, accelerationStatus)
     }
 
     override fun close() {
@@ -206,6 +213,9 @@ class NativeDetector private constructor() : ImageDetector {
      */
     private external fun newDetector(): Long
 
+    /** Returns runtime OpenCL availability and the selected device, if any. */
+    private external fun getOpenCLStatusNative(): String
+
     /**
      * Deletes the native detector.
      * Once called, this object can't be used anymore.
@@ -312,3 +322,4 @@ class NativeDetector private constructor() : ImageDetector {
     /** Native method for releasing the screen image resources set with [setScreenImage]. */
     private external fun releaseScreenImage(screenBitmap: Bitmap)
 }
+private const val OPENCL_TAG = "SmartAutoClickerOpenCL"
