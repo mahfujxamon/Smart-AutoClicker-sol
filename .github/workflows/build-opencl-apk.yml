@@ -41,9 +41,9 @@ jobs:
         run: |
           set -euxo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          # API 37 is currently published through the Android SDK preview channel.
-          sdkmanager --channel=3 \
-            "platforms;android-37" \
+          # Use stable Android API 36. This experimental branch pins compileSdk to 36.
+          sdkmanager \
+            "platforms;android-36" \
             "ndk;${ANDROID_NDK_VERSION}"
           test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/source.properties"
           cat "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/source.properties"
@@ -101,7 +101,13 @@ jobs:
             -DOPENCL_ICD_LOADER_HEADERS_DIR="${GITHUB_WORKSPACE}/opencl-headers" \
             -DENABLE_OPENCL_LAYERS=OFF
           cmake --build icd-loader/build --config Release --target OpenCL -j"$(nproc)"
-          test -s icd-loader/build/libOpenCL.a
+          LOADER_A="$(find icd-loader/build -type f -name 'libOpenCL.a' -print -quit)"
+          test -n "$LOADER_A"
+          test -s "$LOADER_A"
+          mkdir -p icd-loader/build
+          if [ "$LOADER_A" != "${GITHUB_WORKSPACE}/icd-loader/build/libOpenCL.a" ]; then
+            cp "$LOADER_A" icd-loader/build/libOpenCL.a
+          fi
           file icd-loader/build/libOpenCL.a
           ar t icd-loader/build/libOpenCL.a | head -80
 
