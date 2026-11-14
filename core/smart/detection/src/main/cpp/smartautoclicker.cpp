@@ -21,6 +21,7 @@
 #include <android/bitmap.h>
 #include <jni.h>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/ocl.hpp>
 #include <string>
 #include <map>
 
@@ -40,6 +41,34 @@ extern "C" {
         // for the first image-detection request. Discovery itself is symbol-only.
         configureAndroidOpenCLProvider();
         return reinterpret_cast<jlong>(new Detector());
+    }
+
+    JNIEXPORT jstring JNICALL Java_com_buzbuz_smartautoclicker_core_detection_NativeDetector_getOpenCLStatusNative(
+            JNIEnv *env,
+            jobject self
+    ) {
+        configureAndroidOpenCLProvider();
+
+        std::string status;
+        try {
+            if (!cv::ocl::haveOpenCL()) {
+                status = "CPU FALLBACK — OpenCL runtime/device not available";
+            } else if (!cv::ocl::useOpenCL()) {
+                status = "CPU FALLBACK — OpenCL found but disabled by OpenCV";
+            } else {
+                cv::ocl::Device device = cv::ocl::Device::getDefault();
+                const std::string name = device.name();
+                status = "OPENCL READY — " + (name.empty() ? std::string("unnamed device") : name)
+                         + " (GPU execution will be verified during image matching)";
+            }
+        } catch (const cv::Exception& e) {
+            status = std::string("CPU FALLBACK — OpenCL check failed: ") + e.what();
+        } catch (...) {
+            status = "CPU FALLBACK — unknown OpenCL status error";
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "SmartAutoClickerOpenCL", "%s", status.c_str());
+        return env->NewStringUTF(status.c_str());
     }
 
     JNIEXPORT jboolean JNICALL Java_com_buzbuz_smartautoclicker_core_detection_NativeDetector_loadDetectionModels(
