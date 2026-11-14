@@ -1,7 +1,7 @@
 [versions]
 
 # Android SDK
-androidCompileSdk = "37"
+androidCompileSdk = "36"
 androidMinSdk = "24"
 androidNdk = "28.2.13676358"
 
