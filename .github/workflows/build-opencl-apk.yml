@@ -41,7 +41,8 @@ jobs:
         run: |
           set -euxo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
+          # API 37 is currently published through the Android SDK preview channel.
+          sdkmanager --channel=3 \
             "platforms;android-37" \
             "ndk;${ANDROID_NDK_VERSION}"
           test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/source.properties"
