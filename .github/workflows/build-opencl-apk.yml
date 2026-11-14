@@ -105,7 +105,7 @@ jobs:
           test -n "$LOADER_A"
           test -s "$LOADER_A"
           mkdir -p icd-loader/build
-          if [ "$LOADER_A" != "${GITHUB_WORKSPACE}/icd-loader/build/libOpenCL.a" ]; then
+          if [ "$(realpath "$LOADER_A")" != "$(realpath icd-loader/build/libOpenCL.a)" ]; then
             cp "$LOADER_A" icd-loader/build/libOpenCL.a
           fi
           file icd-loader/build/libOpenCL.a
